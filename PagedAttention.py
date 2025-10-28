@@ -273,16 +273,23 @@ def main():
   seq_caches = [PagedKVSequence(PagedSize, NumHeads, HeadDim, Device) for _ in range(BatchSize)]
   
   # run 10 steps of incremental decoding
-  x = torch.randn(BatchSize, model_dim, device=Device)
+  # In LLM decoding each batch element advances one token per step.
+  # We'll run 10 decoding steps and show batched outputs and cache lengths.
   for t in range(10):
     x = torch.randn(BatchSize, model_dim, device=Device)
-    out = layer.step(x, seq_caches)
+    out = layer.step(x, seq_caches)  # out: (B, model_dim)
+    # gather current cache lengths for debugging/inspection
+    lengths_now = [c.total_tokens for c in seq_caches]
     if t % 2 == 0:
-      print(f"Step {t}: produced shape {out.shape}") 
+      print(f"Step {t}: produced shape {out.shape}, cache lengths: {lengths_now}")
   
   # inspect pages
   for i, cache in enumerate(seq_caches):
     print(f"seq {i} pages: {len(cache.pages)}, total tokens: {cache.total_tokens}")
+
+  # Demonstrate batched gather/pad used in the inference path
+  k_padded, v_padded, lengths = gather_kv_batch(seq_caches, device=Device)
+  print(f"Batched gather -> k_padded.shape={tuple(k_padded.shape)}, v_padded.shape={tuple(v_padded.shape)}, lengths={lengths}")
 
   print("done.")
 
